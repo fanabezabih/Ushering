@@ -1,0 +1,215 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum ApplicationStatus {
+  SUBMITTED
+  UNDER_REVIEW
+  SHORTLISTED
+  APPROVED
+  REJECTED
+  WITHDRAWN
+}
+
+enum ShiftPreference {
+  MORNING
+  AFTERNOON
+  EVENING
+  NO_PREFERENCE
+}
+
+enum DocumentType {
+  PHOTO
+  ID
+  CV
+  EXPERIENCE_PROOF
+}
+
+enum VerificationStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+model Event {
+  id                  String        @id @default(uuid())
+  name                String
+  venue               String?
+  startDate           DateTime?
+  endDate             DateTime?
+  orientationDate     DateTime?
+  applicationDeadline DateTime?
+  isActive            Boolean       @default(true)
+  createdAt           DateTime      @default(now())
+  applications        Application[]
+}
+
+model Applicant {
+  id                    String              @id @default(uuid())
+  fullName              String
+  email                 String              @unique
+  phone                 String              @unique
+  dateOfBirth           DateTime            @db.Date
+  gender                String?
+  city                  String
+  emergencyContactName  String
+  emergencyContactPhone String
+  emergencyRelationship String
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+  applications          Application[]
+  languages             ApplicantLanguage[]
+
+  @@index([city])
+}
+
+model Language {
+  id         String              @id @default(uuid())
+  name       String              @unique
+  applicants ApplicantLanguage[]
+}
+
+model ApplicantLanguage {
+  applicantId String
+  languageId  String
+  applicant   Applicant @relation(fields: [applicantId], references: [id], onDelete: Cascade)
+  language    Language  @relation(fields: [languageId], references: [id])
+
+  @@id([applicantId, languageId])
+}
+
+model Application {
+  id                      String            @id @default(uuid())
+  refSeq                  Int               @unique @default(autoincrement())
+  referenceNumber         String?           @unique
+  status                  ApplicationStatus @default(SUBMITTED)
+  fullEventAvailability   Boolean
+  orientationAvailability Boolean
+  additionalNotes         String?
+  submittedAt             DateTime          @default(now())
+  createdAt               DateTime          @default(now())
+  updatedAt               DateTime          @updatedAt
+  applicantId             String
+  eventId                 String
+  applicant               Applicant         @relation(fields: [applicantId], references: [id])
+  event                   Event             @relation(fields: [eventId], references: [id])
+  experience              Experience?
+  availability            Availability[]
+  documents               Document[]
+  consents                Consent[]
+  notes                   ApplicationNote[]
+  statusHistory           StatusHistory[]
+
+  @@unique([applicantId, eventId])
+  @@index([status])
+  @@index([submittedAt])
+}
+
+model Experience {
+  id                  String      @id @default(uuid())
+  applicationId       String      @unique
+  usheringExperience  Boolean
+  usheringDescription String?
+  eventExperience     Boolean
+  previousEvents      String?
+  skills              String[]
+  currentOccupation   String?
+  motivation          String?
+  application         Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+}
+
+model Availability {
+  id              String           @id @default(uuid())
+  applicationId   String
+  eventDate       DateTime         @db.Date
+  shiftPreference ShiftPreference?
+  createdAt       DateTime         @default(now())
+  application     Application      @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@index([applicationId])
+}
+
+model Document {
+  id                 String             @id @default(uuid())
+  applicationId      String
+  documentType       DocumentType
+  originalFilename   String
+  storageKey         String
+  mimeType           String
+  fileSize           Int
+  verificationStatus VerificationStatus @default(PENDING)
+  uploadedAt         DateTime           @default(now())
+  application        Application        @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@index([applicationId])
+}
+
+model Consent {
+  id            String      @id @default(uuid())
+  applicationId String
+  consentType   String
+  accepted      Boolean
+  policyVersion String
+  acceptedAt    DateTime    @default(now())
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@index([applicationId])
+}
+
+model AdminUser {
+  id            String            @id @default(uuid())
+  fullName      String
+  email         String            @unique
+  passwordHash  String
+  role          String            @default("ADMIN")
+  isActive      Boolean           @default(true)
+  lastLogin     DateTime?
+  createdAt     DateTime          @default(now())
+  notes         ApplicationNote[]
+  statusChanges StatusHistory[]
+  auditLogs     AuditLog[]
+}
+
+model ApplicationNote {
+  id            String      @id @default(uuid())
+  applicationId String
+  adminId       String
+  note          String
+  createdAt     DateTime    @default(now())
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  admin         AdminUser   @relation(fields: [adminId], references: [id])
+
+  @@index([applicationId])
+}
+
+model StatusHistory {
+  id             String             @id @default(uuid())
+  applicationId  String
+  previousStatus ApplicationStatus?
+  newStatus      ApplicationStatus
+  changedById    String?
+  reason         String?
+  changedAt      DateTime           @default(now())
+  application    Application        @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  changedBy      AdminUser?         @relation(fields: [changedById], references: [id])
+
+  @@index([applicationId])
+}
+
+model AuditLog {
+  id        String    @id @default(uuid())
+  adminId   String
+  action    String
+  entity    String?
+  entityId  String?
+  details   Json?
+  createdAt DateTime  @default(now())
+  admin     AdminUser @relation(fields: [adminId], references: [id])
+
+  @@index([createdAt])
+}
